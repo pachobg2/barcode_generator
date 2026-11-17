@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barcode Stickers</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #ffffff; --text: #1f2937; --muted: #6b7280;
+    --line: #d1d5db; --accent: #2563eb; --accent-text: #ffffff; --bad: #b91c1c; --ok: #15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111827; --panel:#1f2937; --text:#f3f4f6; --muted:#9ca3af; --line:#374151; --accent:#3b82f6; --bad:#f87171; --ok:#4ade80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+  .app { display:grid; grid-template-columns: minmax(340px, 480px) 1fr; min-height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:16px; overflow:auto; }
+  main { padding:24px; display:flex; flex-direction:column; align-items:center; gap:16px; }
+  h1 { font-size:18px; margin:0 0 12px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:18px 0 8px; }
+  label { display:block; font-size:12px; color:var(--muted); }
+  input, select { width:100%; font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  input:focus, select:focus { outline:2px solid var(--accent); outline-offset:-1px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .check { display:flex; align-items:center; gap:6px; margin-top:8px; color:var(--text); font-size:13px; }
+  .check input { width:auto; }
+  button { font:inherit; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:6px; padding:6px 10px; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; padding:8px 18px; }
+  .item { border:1px solid var(--line); border-radius:8px; padding:8px; margin-bottom:8px; background:var(--bg); }
+  .item.sel { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .item .row { display:grid; grid-template-columns:1fr 64px; gap:6px; margin-bottom:6px; }
+  .item .row3 { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px; }
+  .item .foot { display:flex; justify-content:space-between; align-items:center; font-size:12px; gap:8px; }
+  .status.ok { color:var(--ok); } .status.bad { color:var(--bad); }
+  .code { font-family: Consolas, monospace; letter-spacing:.04em; }
+  .stage { background:#fff; box-shadow:0 2px 14px rgba(0,0,0,.25); }
+  .hint { color:var(--muted); font-size:12px; max-width:480px; text-align:center; }
+  .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; }
+  #printArea { display:none; }
+  @media (max-width: 800px) { .app { grid-template-columns:1fr; } aside { border-right:0; border-bottom:1px solid var(--line); } }
+  @media print {
+    body { background:#fff; }
+    .app { display:none !important; }
+    #printArea { display:block; }
+    .sheet { page-break-after:always; break-after:page; overflow:hidden; }
+    .sheet:last-child { page-break-after:auto; break-after:auto; }
+    .sheet svg { display:block; }
+  }
+</style>
+<style id="pageStyle"></style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.0.0</span></h1>
+
+    <h2>Sticker</h2>
+    <div class="grid">
+      <div><label for="w">Width (mm)</label><input id="w" type="number" min="10" max="200" step="0.5"></div>
+      <div><label for="h">Height (mm)</label><input id="h" type="number" min="10" max="200" step="0.5"></div>
+      <div><label>&nbsp;</label><button id="rotate" title="Swap width and height" style="width:100%">⟲ Rotate</button></div>
+      <div><label for="pad">Margin (mm)</label><input id="pad" type="number" min="0" max="10" step="0.1"></div>
+      <div><label for="fs">Text size (mm)</label><input id="fs" type="number" min="1" max="12" step="0.1"></div>
+      <div><label for="tpos">Text position</label>
+        <select id="tpos"><option value="above">Above barcode</option><option value="below">Below barcode</option></select></div>
+    </div>
+    <label class="check"><input id="digits" type="checkbox"> Show digits under the barcode</label>
+    <label class="check"><input id="border" type="checkbox"> Print a thin cut-guide border</label>
+
+    <h2>Labels</h2>
+    <div id="items"></div>
+    <div class="bar" style="justify-content:flex-start">
+      <button id="add">+ Add label</button>
+      <button id="paste" title="One label per line: code;line 1;line 2;copies">Paste list…</button>
+    </div>
+    <p class="hint" style="text-align:left;margin-top:12px">
+      Enter 13 digits, or 12 digits and the check digit is added for you.
+      Settings and labels are saved in this browser.
+    </p>
+  </aside>
+
+  <main>
+    <div class="bar">
+      <button class="primary" id="print">🖨 Print <span id="total"></span></button>
+    </div>
+    <div class="stage" id="stage"></div>
+    <div class="hint">Preview of the selected label at actual proportions.
+      In the print dialog choose your label printer, set paper size to the sticker size,
+      margins <b>None</b>, scale <b>100%</b>.</div>
+  </main>
+</div>
+<div id="printArea"></div>
+
+<script>
+"use strict";
+const KEY = "barcode_stickers_v1";
+const defaults = {
+  s: { w:30, h:40, pad:1.5, fs:3.2, tpos:"above", digits:true, border:false },
+  items: [{ code:"0742042798476", l1:"Product name", l2:"", copies:1 }],
+  sel: 0
+};
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { state = null; }
+if (!state || !state.s || !Array.isArray(state.items) || !state.items.length) state = JSON.parse(JSON.stringify(defaults));
+state.s = Object.assign({}, defaults.s, state.s);
+state.sel = Math.min(state.sel || 0, state.items.length - 1);
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+
+/* ---------- EAN-13 ---------- */
+const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+const R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+const PAR = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+
+function checkDigit(d12) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += +d12[i] * (i % 2 ? 3 : 1);
+  return String((10 - sum % 10) % 10);
+}
+// -> { code13, ok, msg }
+function eanInfo(raw) {
+  const d = (raw || "").replace(/\D/g, "");
+  if (d.length === 12) return { code: d + checkDigit(d), ok: true, msg: "check digit added" };
+  if (d.length === 13) {
+    const good = checkDigit(d.slice(0, 12));
+    if (d[12] === good) return { code: d, ok: true, msg: "valid" };
+    return { code: d, ok: false, fix: d.slice(0, 12) + good, msg: "wrong check digit (should be " + good + ")" };
+  }
+  return { code: null, ok: false, msg: "needs 12 or 13 digits (" + d.length + ")" };
+}
+function ean13Bits(code) {
+  const par = PAR[+code[0]];
+  let b = "101";
+  for (let i = 0; i < 6; i++) b += (par[i] === "L" ? L : G)[+code[i + 1]];
+  b += "01010";
+  for (let i = 0; i < 6; i++) b += R[+code[i + 7]];
+  return b + "101";
+}
+
+/* ---------- label rendering (SVG in mm) ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+const f = n => (+n).toFixed(3).replace(/\.?0+$/, "");
+
+function labelSVG(item, s) {
+  const W = +s.w, H = +s.h, pad = +s.pad;
+  const aw = W - 2 * pad;
+  const m = aw / 111;                       // module width: 9 quiet + 95 bars + 7 quiet
+  const x0 = pad + 9 * m;
+  const info = eanInfo(item.code);
+  const lines = [[item.l1, 1], [item.l2, 0.85]].filter(l => (l[0] || "").trim());
+  const fsBase = +s.fs;
+  let textH = 0;
+  const tl = lines.map(([t, k]) => {
+    t = t.trim();
+    const size = Math.min(fsBase * k, aw / (t.length * 0.55));
+    const h = size * 1.2;
+    textH += h;
+    return { t, size, h };
+  });
+  const gap = tl.length ? 1 : 0;
+  const dH = s.digits ? 2.6 : 0;
+  const barH = Math.max(5, H - 2 * pad - textH - gap - dH);
+  const above = s.tpos === "above";
+  const barTop = above ? pad + textH + gap : pad;
+  let y = above ? pad : pad + barH + dH + gap;
+
+  let out = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}mm" height="${H}mm" viewBox="0 0 ${f(W)} ${f(H)}" font-family="Arial, Helvetica, sans-serif" fill="#000">`;
+  out += `<rect width="${f(W)}" height="${f(H)}" fill="#fff"/>`;
+  if (s.border) out += `<rect x="0.1" y="0.1" width="${f(W - 0.2)}" height="${f(H - 0.2)}" fill="none" stroke="#000" stroke-width="0.1"/>`;
+  tl.forEach(l => {
+    out += `<text x="${f(W / 2)}" y="${f(y + l.size * 0.95)}" font-size="${f(l.size)}" text-anchor="middle" font-weight="${l === tl[0] ? 700 : 400}">${esc(l.t)}</text>`;
+    y += l.h;
+  });
+  if (!info.code) {
+    out += `<text x="${f(W / 2)}" y="${f(barTop + barH / 2)}" font-size="2.4" text-anchor="middle" fill="#b00">invalid code</text></svg>`;
+    return out;
+  }
+  const bits = ean13Bits(info.code);
+  const guard = i => i < 3 || (i >= 45 && i < 50) || i >= 92;
+  const ext = s.digits ? dH * 0.55 : 0;
+  // merge runs of equal height
+  let i = 0;
+  while (i < 95) {
+    if (bits[i] !== "1") { i++; continue; }
+    const g = guard(i);
+    let j = i;
+    while (j < 95 && bits[j] === "1" && guard(j) === g) j++;
+    out += `<rect x="${f(x0 + i * m)}" y="${f(barTop)}" width="${f((j - i) * m)}" height="${f(barH + (g ? ext : 0))}"/>`;
+    i = j;
+  }
+  if (s.digits) {
+    const ty = barTop + barH + dH * 0.88, fz = dH * 0.95;
+    const t = (x, c) => `<text x="${f(x)}" y="${f(ty)}" font-size="${f(fz)}" text-anchor="middle">${c}</text>`;
+    out += t(x0 - 4.5 * m, info.code[0]);
+    for (let k = 0; k < 6; k++) out += t(x0 + (3 + 7 * k + 3.5) * m, info.code[k + 1]);
+    for (let k = 0; k < 6; k++) out += t(x0 + (50 + 7 * k + 3.5) * m, info.code[k + 7]);
+  }
+  return out + "</svg>";
+}
+
+/* ---------- UI ---------- */
+const $ = id => document.getElementById(id);
+const settingIds = ["w", "h", "pad", "fs", "tpos"];
+
+function loadSettings() {
+  settingIds.forEach(id => $(id).value = state.s[id]);
+  $("digits").checked = state.s.digits;
+  $("border").checked = state.s.border;
+}
+function readSettings() {
+  settingIds.forEach(id => {
+    const v = $(id).value;
+    state.s[id] = id === "tpos" ? v : (parseFloat(v) > 0 || id === "pad" ? parseFloat(v) || 0 : state.s[id]);
+  });
+  state.s.digits = $("digits").checked;
+  state.s.border = $("border").checked;
+  save(); renderPreview();
+}
+
+function renderItems() {
+  const box = $("items");
+  box.innerHTML = "";
+  state.items.forEach((it, i) => {
+    const info = eanInfo(it.code);
+    const d = document.createElement("div");
+    d.className = "item" + (i === state.sel ? " sel" : "");
+    d.innerHTML =
+      `<div class="row"><div><label>EAN-13 code</label><input class="code" data-k="code" value="${esc(it.code)}" inputmode="numeric" maxlength="13"></div>` +
+      `<div><label>Copies</label><input data-k="copies" type="number" min="1" max="999" value="${it.copies}"></div></div>` +
+      `<div class="row3"><div><label>Text line 1</label><input data-k="l1" value="${esc(it.l1)}"></div>` +
+      `<div><label>Text line 2</label><input data-k="l2" value="${esc(it.l2)}"></div></div>` +
+      `<div class="foot"><span class="status ${info.ok ? "ok" : "bad"}">${info.ok ? "✓" : "⚠"} ${esc(info.msg)}` +
+      `${info.fix ? ` <button data-act="fix">Fix</button>` : ""}</span>` +
+      `<span><button data-act="dup">Duplicate</button> <button data-act="del">Delete</button></span></div>`;
+    d.addEventListener("click", () => { if (state.sel !== i) { state.sel = i; save(); renderItems(); renderPreview(); } });
+    d.querySelectorAll("input").forEach(inp => inp.addEventListener("input", () => {
+      const k = inp.dataset.k;
+      it[k] = k === "copies" ? Math.max(1, parseInt(inp.value) || 1) : (k === "code" ? inp.value.replace(/\D/g, "") : inp.value);
+      if (k === "code" && inp.value !== it.code) inp.value = it.code;
+      state.sel = i; save(); renderPreview(); updateStatus(d, it); updateTotal();
+    }));
+    d.querySelectorAll("button").forEach(b => b.addEventListener("click", e => {
+      e.stopPropagation();
+      const a = b.dataset.act;
+      if (a === "fix") it.code = eanInfo(it.code).fix;
+      if (a === "dup") { state.items.splice(i + 1, 0, Object.assign({}, it)); state.sel = i + 1; }
+      if (a === "del") { if (state.items.length > 1) { state.items.splice(i, 1); state.sel = Math.min(state.sel, state.items.length - 1); } }
+      save(); renderItems(); renderPreview();
+    }));
+    box.appendChild(d);
+  });
+  updateTotal();
+}
+function updateStatus(div, it) {
+  const info = eanInfo(it.code);
+  const st = div.querySelector(".status");
+  st.className = "status " + (info.ok ? "ok" : "bad");
+  st.innerHTML = `${info.ok ? "✓" : "⚠"} ${esc(info.msg)}` + (info.fix ? ` <button data-act="fix">Fix</button>` : "");
+  const fx = st.querySelector("button");
+  if (fx) fx.addEventListener("click", e => { e.stopPropagation(); it.code = info.fix; save(); renderItems(); renderPreview(); });
+}
+function updateTotal() {
+  const n = state.items.reduce((a, it) => a + it.copies, 0);
+  $("total").textContent = "(" + n + (n === 1 ? " sticker)" : " stickers)");
+}
+function renderPreview() {
+  const s = state.s;
+  const scale = Math.min(12, Math.max(4, 420 / Math.max(s.w, s.h)));   // px per mm
+  const stage = $("stage");
+  stage.innerHTML = labelSVG(state.items[state.sel], s);
+  const svg = stage.firstElementChild;
+  svg.setAttribute("width", s.w * scale);
+  svg.setAttribute("height", s.h * scale);
+  svg.style.display = "block";
+}
+
+$("add").onclick = () => { state.items.push({ code:"", l1:"", l2:"", copies:1 }); state.sel = state.items.length - 1; save(); renderItems(); renderPreview(); };
+$("rotate").onclick = () => { [state.s.w, state.s.h] = [state.s.h, state.s.w]; save(); loadSettings(); renderPreview(); };
+$("paste").onclick = () => {
+  const txt = prompt("One label per line:  code ; line 1 ; line 2 ; copies\n(line 2 and copies are optional)");
+  if (!txt) return;
+  const add = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
+    const p = l.split(/[;\t]/).map(x => x.trim());
+    return { code:(p[0] || "").replace(/\D/g, ""), l1:p[1] || "", l2:p[2] || "", copies:Math.max(1, parseInt(p[3]) || 1) };
+  });
+  if (!add.length) return;
+  state.items = state.items.length === 1 && !state.items[0].code ? add : state.items.concat(add);
+  state.sel = 0; save(); renderItems(); renderPreview();
+};
+settingIds.concat(["digits", "border"]).forEach(id => $(id).addEventListener("input", readSettings));
+
+$("print").onclick = () => {
+  const bad = state.items.filter(it => !eanInfo(it.code).code);
+  if (bad.length && !confirm(bad.length + " label(s) have an invalid code and will print without a barcode. Continue?")) return;
+  const s = state.s;
+  $("pageStyle").textContent = `@page { size: ${s.w}mm ${s.h}mm; margin: 0; }
+    @media print { html, body { margin:0; padding:0; } .sheet { width:${s.w}mm; height:${s.h}mm; } }`;
+  let html = "";
+  state.items.forEach(it => {
+    const info = eanInfo(it.code);
+    const svg = labelSVG(Object.assign({}, it, info.code ? { code: info.code } : {}), s);
+    for (let c = 0; c < it.copies; c++) html += `<div class="sheet">${svg}</div>`;
+  });
+  $("printArea").innerHTML = html;
+  window.print();
+};
+
+loadSettings(); renderItems(); renderPreview();
+</script>
+</body>
+</html>
