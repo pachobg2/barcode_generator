@@ -55,7 +55,7 @@
 <body>
 <div class="app">
   <aside>
-    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.1.0</span></h1>
+    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.2.0</span></h1>
 
     <h2>Sticker</h2>
     <div class="grid">
@@ -69,6 +69,7 @@
     </div>
     <label class="check"><input id="digits" type="checkbox"> Show digits under the barcode</label>
     <label class="check"><input id="border" type="checkbox"> Print a thin cut-guide border</label>
+    <label class="check"><input id="snInc" type="checkbox"> Auto-increment serial on each copy (SN-0009 → SN-0010)</label>
 
     <h2>Labels</h2>
     <div id="items"></div>
@@ -98,7 +99,7 @@
 "use strict";
 const KEY = "barcode_stickers_v1";
 const defaults = {
-  s: { w:30, h:40, pad:1.5, fs:3.2, tpos:"above", digits:true, border:false },
+  s: { w:30, h:40, pad:1.5, fs:3.2, tpos:"above", digits:true, border:false, snInc:true },
   items: [{ code:"0742042798476", l1:"Product name", l2:"", copies:1 }],
   sel: 0
 };
@@ -202,6 +203,14 @@ function labelSVG(item, s) {
   return out + "</svg>";
 }
 
+// Add k to the last run of digits, keeping prefix/suffix and zero padding: "SN-0009" +1 -> "SN-0010"
+function bumpSerial(sn, k) {
+  const m = /^(.*?)(\d+)(\D*)$/.exec(sn || "");
+  if (!m || !k) return sn;
+  const n = (BigInt(m[2]) + BigInt(k)).toString().padStart(m[2].length, "0");
+  return m[1] + n + m[3];
+}
+
 /* ---------- UI ---------- */
 const $ = id => document.getElementById(id);
 const settingIds = ["w", "h", "pad", "fs", "tpos"];
@@ -210,6 +219,7 @@ function loadSettings() {
   settingIds.forEach(id => $(id).value = state.s[id]);
   $("digits").checked = state.s.digits;
   $("border").checked = state.s.border;
+  $("snInc").checked = state.s.snInc;
 }
 function readSettings() {
   settingIds.forEach(id => {
@@ -218,6 +228,7 @@ function readSettings() {
   });
   state.s.digits = $("digits").checked;
   state.s.border = $("border").checked;
+  state.s.snInc = $("snInc").checked;
   save(); renderPreview();
 }
 
@@ -292,7 +303,7 @@ $("paste").onclick = () => {
   state.items = state.items.length === 1 && !state.items[0].code ? add : state.items.concat(add);
   state.sel = 0; save(); renderItems(); renderPreview();
 };
-settingIds.concat(["digits", "border"]).forEach(id => $(id).addEventListener("input", readSettings));
+settingIds.concat(["digits", "border", "snInc"]).forEach(id => $(id).addEventListener("input", readSettings));
 
 $("print").onclick = () => {
   const bad = state.items.filter(it => !eanInfo(it.code).code);
@@ -303,8 +314,10 @@ $("print").onclick = () => {
   let html = "";
   state.items.forEach(it => {
     const info = eanInfo(it.code);
-    const svg = labelSVG(Object.assign({}, it, info.code ? { code: info.code } : {}), s);
-    for (let c = 0; c < it.copies; c++) html += `<div class="sheet">${svg}</div>`;
+    for (let c = 0; c < it.copies; c++) {
+      const sn = s.snInc ? bumpSerial(it.sn, c) : it.sn;
+      html += `<div class="sheet">${labelSVG(Object.assign({}, it, { sn }, info.code ? { code: info.code } : {}), s)}</div>`;
+    }
   });
   $("printArea").innerHTML = html;
   window.print();
