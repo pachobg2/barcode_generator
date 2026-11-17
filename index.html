@@ -55,7 +55,7 @@
 <body>
 <div class="app">
   <aside>
-    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.0.0</span></h1>
+    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.1.0</span></h1>
 
     <h2>Sticker</h2>
     <div class="grid">
@@ -150,7 +150,8 @@ function labelSVG(item, s) {
   const m = aw / 111;                       // module width: 9 quiet + 95 bars + 7 quiet
   const x0 = pad + 9 * m;
   const info = eanInfo(item.code);
-  const lines = [[item.l1, 1], [item.l2, 0.85]].filter(l => (l[0] || "").trim());
+  const sn = (item.sn || "").trim();
+  const lines = [[item.l1, 1], [item.l2, 0.85], [sn ? "S/N: " + sn : "", 0.8]].filter(l => (l[0] || "").trim());
   const fsBase = +s.fs;
   let textH = 0;
   const tl = lines.map(([t, k]) => {
@@ -232,6 +233,7 @@ function renderItems() {
       `<div><label>Copies</label><input data-k="copies" type="number" min="1" max="999" value="${it.copies}"></div></div>` +
       `<div class="row3"><div><label>Text line 1</label><input data-k="l1" value="${esc(it.l1)}"></div>` +
       `<div><label>Text line 2</label><input data-k="l2" value="${esc(it.l2)}"></div></div>` +
+      `<div style="margin-bottom:6px"><label>Serial number (optional)</label><input data-k="sn" value="${esc(it.sn || "")}"></div>` +
       `<div class="foot"><span class="status ${info.ok ? "ok" : "bad"}">${info.ok ? "✓" : "⚠"} ${esc(info.msg)}` +
       `${info.fix ? ` <button data-act="fix">Fix</button>` : ""}</span>` +
       `<span><button data-act="dup">Duplicate</button> <button data-act="del">Delete</button></span></div>`;
@@ -277,14 +279,14 @@ function renderPreview() {
   svg.style.display = "block";
 }
 
-$("add").onclick = () => { state.items.push({ code:"", l1:"", l2:"", copies:1 }); state.sel = state.items.length - 1; save(); renderItems(); renderPreview(); };
+$("add").onclick = () => { state.items.push({ code:"", l1:"", l2:"", sn:"", copies:1 }); state.sel = state.items.length - 1; save(); renderItems(); renderPreview(); };
 $("rotate").onclick = () => { [state.s.w, state.s.h] = [state.s.h, state.s.w]; save(); loadSettings(); renderPreview(); };
 $("paste").onclick = () => {
-  const txt = prompt("One label per line:  code ; line 1 ; line 2 ; copies\n(line 2 and copies are optional)");
+  const txt = prompt("One label per line:  code ; line 1 ; line 2 ; copies ; serial\n(everything after the code is optional)");
   if (!txt) return;
   const add = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => {
     const p = l.split(/[;\t]/).map(x => x.trim());
-    return { code:(p[0] || "").replace(/\D/g, ""), l1:p[1] || "", l2:p[2] || "", copies:Math.max(1, parseInt(p[3]) || 1) };
+    return { code:(p[0] || "").replace(/\D/g, ""), l1:p[1] || "", l2:p[2] || "", copies:Math.max(1, parseInt(p[3]) || 1), sn:p[4] || "" };
   });
   if (!add.length) return;
   state.items = state.items.length === 1 && !state.items[0].code ? add : state.items.concat(add);

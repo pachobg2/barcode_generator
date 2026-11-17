@@ -23,3 +23,4 @@ scale **100%**.
 | Version | Date | Changes |
 |---|---|---|
 | 1.0.0 | 2026-11-17 | Initial release: EAN-13 generator, 30×40 mm stickers, text lines, batch list, print |
+| 1.1.0 | 2026-11-17 | Optional per-label serial number line (printed as `S/N: …`); "Paste list…" takes serial as 5th field |
