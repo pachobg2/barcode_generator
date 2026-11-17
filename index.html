@@ -55,7 +55,7 @@
 <body>
 <div class="app">
   <aside>
-    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.2.0</span></h1>
+    <h1>Barcode Stickers <span style="font-weight:400;color:var(--muted);font-size:12px">v1.3.0</span></h1>
 
     <h2>Sticker</h2>
     <div class="grid">
@@ -75,7 +75,12 @@
     <div id="items"></div>
     <div class="bar" style="justify-content:flex-start">
       <button id="add">+ Add label</button>
-      <button id="paste" title="One label per line: code;line 1;line 2;copies">Paste list…</button>
+      <button id="paste" title="One label per line: code;line 1;line 2;copies;serial">Paste list…</button>
+    </div>
+    <div class="bar" style="justify-content:flex-start;margin-top:8px">
+      <button id="saveFile" title="Save all labels and sticker settings to a file">💾 Save to file</button>
+      <button id="openFile" title="Load labels and settings from a saved file">📂 Open file…</button>
+      <input id="fileIn" type="file" accept=".json,application/json" hidden>
     </div>
     <p class="hint" style="text-align:left;margin-top:12px">
       Enter 13 digits, or 12 digits and the check digit is added for you.
@@ -86,6 +91,8 @@
   <main>
     <div class="bar">
       <button class="primary" id="print">🖨 Print <span id="total"></span></button>
+      <button id="savePng" title="Save the previewed sticker as a 300 dpi PNG">Save PNG</button>
+      <button id="saveSvg" title="Save the previewed sticker as a vector SVG">Save SVG</button>
     </div>
     <div class="stage" id="stage"></div>
     <div class="hint">Preview of the selected label at actual proportions.
@@ -322,6 +329,57 @@ $("print").onclick = () => {
   $("printArea").innerHTML = html;
   window.print();
 };
+
+/* ---------- save / open ---------- */
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const today = () => new Date().toISOString().slice(0, 10);
+const fileSafe = s => (s || "").replace(/[^\w.-]+/g, "_").slice(0, 40);
+function currentLabel() {
+  const it = state.items[state.sel], info = eanInfo(it.code);
+  return { it, svg: labelSVG(Object.assign({}, it, info.code ? { code: info.code } : {}), state.s),
+           name: (info.code || "label") + (it.sn ? "_" + fileSafe(it.sn) : "") };
+}
+function svgToPng(svg, dpi) {
+  const s = state.s, pw = Math.round(s.w / 25.4 * dpi), ph = Math.round(s.h / 25.4 * dpi);
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas"); c.width = pw; c.height = ph;
+      const g = c.getContext("2d");
+      g.fillStyle = "#fff"; g.fillRect(0, 0, pw, ph);
+      g.drawImage(img, 0, 0, pw, ph);
+      c.toBlob(b => b ? res(b) : rej(new Error("PNG export failed")), "image/png");
+    };
+    img.onerror = () => rej(new Error("PNG export failed"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+}
+$("saveFile").onclick = () => {
+  const data = { app:"barcode_stickers", version:1, saved:new Date().toISOString(), s:state.s, items:state.items };
+  download(new Blob([JSON.stringify(data, null, 2)], { type:"application/json" }), "barcode-labels-" + today() + ".json");
+};
+$("openFile").onclick = () => $("fileIn").click();
+$("fileIn").onchange = e => {
+  const file = e.target.files[0]; e.target.value = "";
+  if (!file) return;
+  file.text().then(t => {
+    const d = JSON.parse(t);
+    if (d.app !== "barcode_stickers" || !Array.isArray(d.items) || !d.items.length) throw new Error("bad file");
+    if (!confirm("Replace the current " + state.items.length + " label(s) with " + d.items.length + " from this file?")) return;
+    state.s = Object.assign({}, defaults.s, d.s);
+    state.items = d.items.map(it => ({ code:String(it.code || "").replace(/\D/g, ""), l1:String(it.l1 || ""), l2:String(it.l2 || ""),
+      sn:String(it.sn || ""), copies:Math.max(1, parseInt(it.copies) || 1) }));
+    state.sel = 0; save(); loadSettings(); renderItems(); renderPreview();
+  }).catch(() => alert("That file is not a valid Barcode Stickers save file."));
+};
+$("saveSvg").onclick = () => { const c = currentLabel(); download(new Blob([c.svg], { type:"image/svg+xml" }), c.name + ".svg"); };
+$("savePng").onclick = () => { const c = currentLabel(); svgToPng(c.svg, 300).then(b => download(b, c.name + ".png"), err => alert(err.message)); };
 
 loadSettings(); renderItems(); renderPreview();
 </script>

@@ -25,3 +25,4 @@ scale **100%**.
 | 1.0.0 | 2026-11-17 | Initial release: EAN-13 generator, 30×40 mm stickers, text lines, batch list, print |
 | 1.1.0 | 2026-11-17 | Optional per-label serial number line (printed as `S/N: …`); "Paste list…" takes serial as 5th field |
 | 1.2.0 | 2026-11-17 | Serial number auto-increments on each printed copy (last digit run, zero padding kept; toggle in Sticker settings) |
+| 1.3.0 | 2026-11-17 | Save/Open: labels + settings to a JSON file; export the previewed sticker as 300 dpi PNG or vector SVG |
